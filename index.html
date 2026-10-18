@@ -57,8 +57,7 @@ summary{cursor:pointer;color:var(--mut);font-size:.9rem}
     <div class="card">
       <div id="dynbox" hidden><label for="dynid">Dynamic ID (short code stored in the QR)</label><input id="dynid" maxlength="40"><p class="note">Dynamic mode: the QR holds a short link, so you can change the content later without reprinting. Pick any content type above.</p></div>
       <div id="form"></div>
-      <div id="recbox" hidden><label for="skey">Sheet key (the SECRET in your Apps Script)</label><input id="skey" type="password" autocomplete="off"><button class="sm" id="save">Save to Google Sheet</button><p class="note" id="st"></p>
-        <details><summary>Manual entry (links.json, no Google Sheet)</summary><textarea id="rec" readonly></textarea><button class="sm" id="cprec">Copy entry</button><p class="note">Add this entry to links.json in your repo and commit. Separate several entries with commas.</p></details></div>
+      <div id="recbox" hidden><button class="sm" id="save">Save QR</button><p class="note" id="st"></p></div>
       <details>
         <summary>Style options</summary>
         <div class="row">
@@ -125,8 +124,8 @@ const TYPES = {
 
 if (window.qrcode) qrcode.stringToBytes = qrcode.stringToBytesFuncs['UTF-8'];
 const $ = id => document.getElementById(id);
-// Paste your Google Apps Script web app URL (ends with /exec) between the quotes. Leave empty to use links.json instead.
-const SHEET_URL = 'https://script.google.com/macros/s/AKfycbxWgTwBP23DHiYkn8Axw4-p_nQQtte91GLrChf-GEVQ_pG1C0dmtkX-wddpUzbsTPJ25A/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycbxWgTwBP23DHiYkn8Axw4-p_nQQtte91GLrChf-GEVQ_pG1C0dmtkX-wddpUzbsTPJ25A/exec';
+const API_KEY = '9895937210';
 let cur = 'url', qr = null, dyn = false, lastRec = null;
 const rid = () => Array.from(crypto.getRandomValues(new Uint8Array(6)), b => 'abcdefghjkmnpqrstuvwxyz23456789'[b % 31]).join('');
 const shortUrl = id => location.href.split(/[?#]/)[0] + '?go=' + id;
@@ -185,8 +184,6 @@ function render() {
     idBad = !/^[\w-]{3,40}$/.test(id);
     data = !rec || idBad ? '' : shortUrl(id);
     lastRec = rec && !idBad ? {id, ...rec} : null;
-    $('rec').value = lastRec ? JSON.stringify({[id]: rec}, null, 2) : '';
-    if (!SHEET_URL) $('st').textContent = 'Google Sheet not connected: paste your Apps Script URL into SHEET_URL at the top of index.html.';
   }
   $('raw').textContent = data;
   $('err').textContent = dyn && idBad ? 'ID: 3-40 letters, numbers, - or _' : '';
@@ -288,28 +285,25 @@ $('svg').onclick = () => {
 };
 ['fg', 'bg', 'ec'].forEach(i => $(i).addEventListener('input', render));
 $('dynid').addEventListener('input', render);
-try { $('skey').value = localStorage.getItem('qrkey') || ''; } catch (e) {}
 $('save').onclick = async () => {
-  if (!SHEET_URL || !lastRec) return;
-  const key = $('skey').value; $('st').textContent = 'Saving…';
-  try { localStorage.setItem('qrkey', key); } catch (e) {}
+  if (!API_URL || !lastRec) return;
+  const key = API_KEY; $('st').textContent = 'Saving…';
   try {
-    await fetch(SHEET_URL, {method: 'POST', mode: 'no-cors', body: JSON.stringify({key, ...lastRec})});
+    await fetch(API_URL, {method: 'POST', mode: 'no-cors', body: JSON.stringify({key, ...lastRec})});
     await new Promise(r => setTimeout(r, 1500));
-    const j = await (await fetch(SHEET_URL + '?id=' + encodeURIComponent(lastRec.id) + '&_=' + Date.now())).json();
-    $('st').textContent = j.d === lastRec.d ? 'Saved. This QR is active.' : 'Not saved. Check the key and that the script is deployed for "Anyone".';
-  } catch (e) { $('st').textContent = 'Could not reach the Google Sheet script.'; }
+    const j = await (await fetch(API_URL + '?id=' + encodeURIComponent(lastRec.id) + '&_=' + Date.now())).json();
+    $('st').textContent = j.d === lastRec.d ? 'Saved. This QR is active.' : 'Could not save. Please try again.';
+  } catch (e) { $('st').textContent = 'Could not save. Please check your connection.'; }
 };
-$('cprec').onclick = () => navigator.clipboard.writeText($('rec').value);
 
-// Landing page for dynamic QR codes: index.html?go=ID looks the ID up in links.json
+// Landing page for dynamic QR codes (index.html?go=ID)
 const esc = t => String(t).replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
 async function runGo(id) {
   $('main').hidden = true; $('go').hidden = false;
   const say = h => $('go').innerHTML = '<div class="card">' + h + '</div>';
   const save = (txt, name, type) => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([txt], {type})); a.download = name; a.click(); };
   try {
-    const x = SHEET_URL ? await (await fetch(SHEET_URL + '?id=' + encodeURIComponent(id))).json() : (await (await fetch('links.json?' + Date.now(), {cache: 'no-store'})).json())[id];
+    const x = await (await fetch(API_URL + '?id=' + encodeURIComponent(id))).json();
     if (!x || !x.d) return say('<h1>QR code not active</h1><p class="sub">This code has not been set up yet.</p>');
     if (x.t === 'open') { say('<p>Opening…</p><p><a href="' + esc(x.d) + '">Tap here if nothing happens</a></p>'); location.replace(x.d); return; }
     let h = '<h1>' + {text: 'Text', wifi: 'Wi-Fi', vcard: 'Contact', event: 'Event'}[x.t] + '</h1>';
