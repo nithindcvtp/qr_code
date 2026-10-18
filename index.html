@@ -72,6 +72,7 @@ summary{cursor:pointer;color:var(--mut);font-size:.9rem}
       <div class="upi-head" id="uh" hidden>Merchant Name</div>
       <canvas id="cv" width="1024" height="1024"></canvas>
       <div class="msg" id="err"></div>
+      <div class="note" id="qid" hidden></div>
       <div class="btns">
         <button id="png">PNG</button>
         <button id="svg" class="alt">SVG</button>
@@ -187,6 +188,8 @@ function render() {
   }
   $('raw').textContent = data;
   $('err').textContent = dyn && idBad ? 'ID: 3-40 letters, numbers, - or _' : '';
+  $('qid').hidden = !(dyn && !idBad && cur !== 'upi' && data);
+  $('qid').textContent = 'Dynamic ID: ' + $('dynid').value.trim();
   const c = $('cv'), g = c.getContext('2d');
   g.fillStyle = $('bg').value; g.fillRect(0, 0, c.width, c.height);
   qr = null;
@@ -266,8 +269,20 @@ async function cardCanvas() {
   }
   return c;
 }
+const idLabel = () => dyn && /^[\w-]{3,40}$/.test($('dynid').value.trim()) ? 'Dynamic ID: ' + $('dynid').value.trim() : '';
 async function exportCanvas() {
-  return cur === 'upi' ? cardCanvas() : $('cv');
+  if (cur === 'upi') return cardCanvas();
+  const src = $('cv'), lb = idLabel();
+  if (!lb) return src;
+  const c = document.createElement('canvas'), pad = 110;
+  c.width = src.width; c.height = src.height + pad;
+  const g = c.getContext('2d');
+  g.fillStyle = $('bg').value; g.fillRect(0, 0, c.width, c.height);
+  g.drawImage(src, 0, 0);
+  g.fillStyle = '#555'; g.font = '500 44px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif';
+  g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillText(lb, c.width / 2, src.height + pad / 2 - 10, c.width - 80);
+  return c;
 }
 $('png').onclick = async () => qr && download((await exportCanvas()).toDataURL('image/png'), cur === 'upi' ? 'upi-qr.png' : 'qrcode.png');
 $('cp').onclick = async () => {
@@ -280,7 +295,8 @@ $('svg').onclick = () => {
   if (!qr) return;
   const n = qr.getModuleCount(), m = 4, t = n + m * 2; let p = '';
   for (let r = 0; r < n; r++) for (let k = 0; k < n; k++) if (qr.isDark(r, k)) p += `M${k + m} ${r + m}h1v1h-1z`;
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${t} ${t}" shape-rendering="crispEdges"><rect width="${t}" height="${t}" fill="${$('bg').value}"/><path d="${p}" fill="${$('fg').value}"/></svg>`;
+  const lb = idLabel(), th = lb ? t + 5 : t;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${t} ${th}"><rect width="${t}" height="${th}" fill="${$('bg').value}"/><path shape-rendering="crispEdges" d="${p}" fill="${$('fg').value}"/>${lb ? `<text x="${t / 2}" y="${t + 1.5}" font-size="2.2" font-family="sans-serif" text-anchor="middle" fill="#555">${lb}</text>` : ''}</svg>`;
   download(URL.createObjectURL(new Blob([svg], {type: 'image/svg+xml'})), 'qrcode.svg');
 };
 ['fg', 'bg', 'ec'].forEach(i => $(i).addEventListener('input', render));
