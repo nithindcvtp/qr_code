@@ -126,7 +126,7 @@ const TYPES = {
 if (window.qrcode) qrcode.stringToBytes = qrcode.stringToBytesFuncs['UTF-8'];
 const $ = id => document.getElementById(id);
 // Paste your Google Apps Script web app URL (ends with /exec) between the quotes. Leave empty to use links.json instead.
-const SHEET_URL = '';
+const SHEET_URL = 'xw36yyd558';
 let cur = 'url', qr = null, dyn = false, lastRec = null;
 const rid = () => Array.from(crypto.getRandomValues(new Uint8Array(6)), b => 'abcdefghjkmnpqrstuvwxyz23456789'[b % 31]).join('');
 const shortUrl = id => location.href.split(/[?#]/)[0] + '?go=' + id;
